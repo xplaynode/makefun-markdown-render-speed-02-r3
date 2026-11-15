@@ -1,0 +1,63 @@
+marked 18.1.3, vendored unchanged for competitions/markdown-render-speed-01 as the reference renderer:
+the expected HTML of every case is what this file's marked.parse(markdown) returns with marked's
+default options (GFM on, async off).
+
+  package     marked@18.1.3 on npm, the latest release when vendored (published 2026-11-02T18:00:32.810Z)
+  tarball     https://registry.npmjs.org/marked/-/marked-18.1.3.tgz
+              sha1 2b1f2aff274503e3ec053c412c6eb979bd7c8194
+              integrity sha512-9ChMH8EVVgjgID49nsL6IWxWk5c6GtAsq/xw7U1ggkjkU5AGuv68oLTVlFRtvcUYZtpbNyjyvGo3YDu0fGapiw==
+  source      https://github.com/markedjs/marked, tag v18.1.3, commit ba50aa95636ac8f97f46446bbfeb04592ed22216
+              (the package's gitHead)
+  licence     MIT (Copyright (c) 2018+, MarkedJS; Copyright (c) 2011-2018, Christopher Jeffrey); LICENSE also
+              carries the original Markdown's BSD-style notice (Copyright 2004, John Gruber)
+
+  marked.esm.js   the package's lib/marked.esm.js, byte for byte
+                  sha256 e76f3b37046a5d294159872002e5f6fcda8ed232e1be45ff76b3863f2919dae3
+  LICENSE         the package's LICENSE, byte for byte
+                  sha256 8e3a3f82f59a60958f56ca08f445647c32a4733dc7ca6c2c46f6eb898471ab9c
+
+Nothing here is edited. The house baseline carries the same two files (baseline/vendor/marked/).
+
+Fork notes (this entry, markdown-render-speed-02)
+--------------------------------------------------
+In THIS entry's copy, marked.esm.js is a performance fork of the file above.
+No rendering rule, regex meaning, token shape, or output string changes;
+each change only skips work whose outcome is already decided, so the HTML
+stays byte-for-byte identical (verified 720/720 on the practice set):
+
+1. Block lexer dispatch (Lexer.blockTokens): before trying a block
+   tokenizer, look at the first characters (after up to three leading
+   spaces). space/code need a leading space or tab; fences need a backtick
+   or tilde; heading a '#'; hr one of '-', '_', '*'; blockquote a '>';
+   list a bullet or digit; html a '<'; def a '['; table a '-' somewhere
+   in the second line; lheading a line starting (after up to three
+   spaces) with '=' or '-'. Every guard is a conservative superset of
+   the rule it guards: it may let a tokenizer run and fail, but it never
+   stops one that could have matched, and the original attempt order is
+   preserved. A skipped tokenizer is one whose anchored regex was
+   guaranteed to fail at this position.
+
+2. Inline lexer dispatch + masking skips (Lexer inline loop, the
+   masking helper fe, and the mask builder): inline tokenizers are
+   attempted only when the first character can start them — escape and
+   br need a backslash (br also a space), tag and autolink a '<', link
+   and reflink a '[' or '!', emStrong a '*' or '_', codespan a backtick,
+   del a '~', and url one of its literal starts (www., mailto:, xmpp:,
+   http(s)://, ftp://, or an address run ending in '@'). The emphasis
+   mask scan returns the all-absent result immediately when the source
+   contains none of '*', '_', '~'. In the mask builder, the
+   punctuation-outside-code pass is skipped when the source contains
+   neither a backtick nor a backslash (the only characters its pattern
+   can match), and the block-skip pass is skipped when the source
+   contains none of '[', '`', '<' (the only characters its alternatives
+   can start with). A skipped pass is one whose global replace would
+   have matched nothing, i.e. the identity.
+
+3. List tokenizer line scanning (Tokenizer.list): the first line of a
+   string is taken with indexOf('\n') + slice instead of
+   split('\n', 1)[0], which allocated an array for a string that was
+   then thrown away; the substring produced is the same. Tab expansion
+   of a line (the leading-whitespace replace, and the whole-line tab
+   replace used in a search test) now runs only when the line actually
+   begins with whitespace or contains a tab, respectively — in every
+   other case the replace was guaranteed to return its input unchanged.
